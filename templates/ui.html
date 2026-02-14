@@ -1,154 +1,220 @@
-<!doctype html>
+<!DOCTYPE html>
 <html>
 <head>
-  <meta charset="utf-8" />
-  <title>Cloud Helpdesk</title>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 24px; }
-    input, button, textarea { padding: 8px; margin: 6px 0; width: 360px; }
-    textarea { height: 90px; }
-    .row { margin-bottom: 16px; }
-    .ticket { border: 1px solid #ccc; padding: 10px; margin: 10px 0; border-radius: 6px; }
-    .small { color: #666; font-size: 12px; }
-    .error { color: #b00020; }
-    .ok { color: #0a7; }
-  </style>
+<title>Helpdesk Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+body {
+  margin:0;
+  font-family: Arial, sans-serif;
+  background:#f4f6f9;
+  display:flex;
+}
+
+.sidebar {
+  width:220px;
+  background:#1f2937;
+  color:white;
+  height:100vh;
+  padding:20px;
+}
+
+.sidebar h2 {
+  font-size:18px;
+  margin-bottom:30px;
+}
+
+.sidebar a {
+  display:block;
+  color:#cbd5e1;
+  text-decoration:none;
+  margin:15px 0;
+}
+
+.sidebar a:hover {
+  color:white;
+}
+
+.main {
+  flex:1;
+  padding:30px;
+}
+
+.card-container {
+  display:grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap:20px;
+  margin-bottom:30px;
+}
+
+.card {
+  background:white;
+  padding:20px;
+  border-radius:10px;
+  box-shadow:0 2px 6px rgba(0,0,0,0.05);
+}
+
+.card h3 {
+  margin:0;
+  font-size:14px;
+  color:#64748b;
+}
+
+.card p {
+  font-size:24px;
+  margin-top:10px;
+}
+
+.table-container {
+  background:white;
+  padding:20px;
+  border-radius:10px;
+  box-shadow:0 2px 6px rgba(0,0,0,0.05);
+}
+
+table {
+  width:100%;
+  border-collapse:collapse;
+}
+
+th, td {
+  padding:10px;
+  text-align:left;
+}
+
+th {
+  background:#f1f5f9;
+}
+
+.status {
+  padding:4px 8px;
+  border-radius:6px;
+  font-size:12px;
+  color:white;
+}
+
+.status.Open { background:#3b82f6; }
+.status.Closed { background:#10b981; }
+.status.Pending { background:#f59e0b; }
+
+button {
+  padding:6px 12px;
+  border:none;
+  border-radius:6px;
+  cursor:pointer;
+  background:#2563eb;
+  color:white;
+}
+</style>
 </head>
 <body>
-  <h1>Cloud Helpdesk</h1>
 
-  <div class="row">
-    <h3>API Key</h3>
-    <input id="apiKey" placeholder="Enter API Key" />
-    <div>
-      <button onclick="saveKey()">Save Key</button>
-      <button onclick="clearKey()">Logout / Clear Key</button>
+<div class="sidebar">
+  <h2>Help Desk</h2>
+  <a href="#">Dashboard</a>
+  <a href="#">Tickets</a>
+  <a href="#">Reports</a>
+  <a href="#">Settings</a>
+</div>
+
+<div class="main">
+  <h1>Support Overview</h1>
+
+  <div class="card-container">
+    <div class="card">
+      <h3>Total Tickets</h3>
+      <p id="totalTickets">0</p>
     </div>
-    <div id="keyStatus" class="small"></div>
-  </div>
-
-  <div class="row">
-    <h3>Create Ticket</h3>
-    <input id="title" placeholder="Title" />
-    <textarea id="description" placeholder="Description"></textarea>
-    <div>
-      <button onclick="createTicket()">Create</button>
+    <div class="card">
+      <h3>Open</h3>
+      <p id="openTickets">0</p>
     </div>
-    <div id="createStatus" class="small"></div>
+    <div class="card">
+      <h3>Closed</h3>
+      <p id="closedTickets">0</p>
+    </div>
+    <div class="card">
+      <h3>Pending</h3>
+      <p id="pendingTickets">0</p>
+    </div>
   </div>
 
-  <div class="row">
-    <h3>Tickets</h3>
-    <button onclick="loadTickets()">Refresh Tickets</button>
-    <div id="tickets"></div>
-    <div id="loadStatus" class="small"></div>
+  <canvas id="ticketChart" height="100"></canvas>
+
+  <br>
+
+  <div class="table-container">
+    <h2>Tickets</h2>
+    <button onclick="loadTickets()">Refresh</button>
+    <br><br>
+    <table id="ticketTable">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Title</th>
+          <th>Status</th>
+          <th>Created</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
   </div>
+
+</div>
 
 <script>
-  function getKey() {
-    return localStorage.getItem("API_KEY") || "";
-  }
+let apiKey = localStorage.getItem("apiKey") || prompt("Enter API Key");
+localStorage.setItem("apiKey", apiKey);
 
-  function setKey(k) {
-    localStorage.setItem("API_KEY", k);
-  }
+async function loadTickets() {
+  const res = await fetch("/tickets", {
+    headers: { "X-API-KEY": apiKey }
+  });
+  const data = await res.json();
 
-  function deleteKey() {
-    localStorage.removeItem("API_KEY");
-  }
+  const tbody = document.querySelector("#ticketTable tbody");
+  tbody.innerHTML = "";
 
-  function headersWithKey() {
-    const k = getKey();
-    return {
-      "Content-Type": "application/json",
-      "X-API-KEY": k
-    };
-  }
+  let open=0, closed=0, pending=0;
 
-  function saveKey() {
-    const k = document.getElementById("apiKey").value.trim();
-    if (!k) {
-      document.getElementById("keyStatus").innerHTML = "<span class='error'>Key cannot be blank.</span>";
-      return;
+  data.forEach(t => {
+    if(t.status==="Open") open++;
+    if(t.status==="Closed") closed++;
+    if(t.status==="Pending") pending++;
+
+    tbody.innerHTML += `
+      <tr>
+        <td>${t.id}</td>
+        <td>${t.title}</td>
+        <td><span class="status ${t.status}">${t.status}</span></td>
+        <td>${new Date(t.created_at).toLocaleString()}</td>
+      </tr>`;
+  });
+
+  document.getElementById("totalTickets").innerText = data.length;
+  document.getElementById("openTickets").innerText = open;
+  document.getElementById("closedTickets").innerText = closed;
+  document.getElementById("pendingTickets").innerText = pending;
+
+  renderChart(open, closed, pending);
+}
+
+function renderChart(open, closed, pending) {
+  new Chart(document.getElementById("ticketChart"), {
+    type: 'doughnut',
+    data: {
+      labels: ["Open","Closed","Pending"],
+      datasets: [{
+        data: [open, closed, pending],
+        backgroundColor: ["#3b82f6","#10b981","#f59e0b"]
+      }]
     }
-    setKey(k);
-    document.getElementById("keyStatus").innerHTML = "<span class='ok'>Saved.</span>";
-  }
+  });
+}
 
-  function clearKey() {
-    deleteKey();
-    document.getElementById("apiKey").value = "";
-    document.getElementById("keyStatus").innerHTML = "<span class='ok'>Cleared.</span>";
-  }
-
-  async function loadTickets() {
-    document.getElementById("loadStatus").textContent = "Loading...";
-    try {
-      const res = await fetch("/tickets", { method: "GET", headers: headersWithKey() });
-      const data = await res.json();
-
-      if (!res.ok) {
-        document.getElementById("tickets").innerHTML = "";
-        document.getElementById("loadStatus").innerHTML = "<span class='error'>" + (data.error || "Error") + "</span>";
-        return;
-      }
-
-      const container = document.getElementById("tickets");
-      container.innerHTML = "";
-
-      data.forEach(t => {
-        const div = document.createElement("div");
-        div.className = "ticket";
-        div.innerHTML =
-          "<b>#" + t.id + " — " + t.title + "</b><br/>" +
-          "<div>" + t.description + "</div>" +
-          "<div class='small'>Status: " + t.status + " | Created: " + t.created_at + "</div>";
-        container.appendChild(div);
-      });
-
-      document.getElementById("loadStatus").innerHTML = "<span class='ok'>Loaded " + data.length + " ticket(s).</span>";
-    } catch (e) {
-      document.getElementById("loadStatus").innerHTML = "<span class='error'>Failed to load.</span>";
-    }
-  }
-
-  async function createTicket() {
-    document.getElementById("createStatus").textContent = "Sending...";
-    const title = document.getElementById("title").value.trim();
-    const description = document.getElementById("description").value.trim();
-
-    try {
-      const res = await fetch("/tickets", {
-        method: "POST",
-        headers: headersWithKey(),
-        body: JSON.stringify({ title, description })
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        document.getElementById("createStatus").innerHTML = "<span class='error'>" + (data.error || "Error") + "</span>";
-        return;
-      }
-
-      document.getElementById("createStatus").innerHTML = "<span class='ok'>Ticket created.</span>";
-      document.getElementById("title").value = "";
-      document.getElementById("description").value = "";
-      loadTickets();
-    } catch (e) {
-      document.getElementById("createStatus").innerHTML = "<span class='error'>Request failed.</span>";
-    }
-  }
-
-  // On page load: fill key box from storage + load tickets
-  (function init() {
-    const k = getKey();
-    document.getElementById("apiKey").value = k;
-    document.getElementById("keyStatus").textContent = k ? "Key loaded from browser storage." : "No key saved yet.";
-    // only auto-load if key exists
-    if (k) loadTickets();
-  })();
+loadTickets();
 </script>
+
 </body>
 </html>
 
