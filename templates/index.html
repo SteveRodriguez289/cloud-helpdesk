@@ -1,0 +1,42 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Helpdesk</title>
+</head>
+<body>
+  <h2>Create Ticket</h2>
+  <input id="title" placeholder="Title">
+  <br>
+  <textarea id="desc" placeholder="Description"></textarea>
+  <br>
+  <button onclick="createTicket()">Create</button>
+
+  <h2>Tickets</h2>
+  <button onclick="loadTickets()">Refresh</button>
+  <pre id="out">Click Refresh</pre>
+
+  <script>
+    async function loadTickets() {
+      const res = await fetch("/tickets");
+      const data = await res.json();
+      document.getElementById("out").textContent = JSON.stringify(data, null, 2);
+    }
+
+    async function createTicket() {
+      const title = document.getElementById("title").value;
+      const description = document.getElementById("desc").value;
+
+      const res = await fetch("/tickets", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ title, description })
+      });
+
+      const data = await res.json();
+      alert(JSON.stringify(data));
+      loadTickets();
+    }
+  </script>
+</body>
+</html>
