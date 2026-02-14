@@ -2,112 +2,153 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Helpdesk</title>
+  <title>Cloud Helpdesk</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 24px; }
-    input, textarea, button { width: 420px; max-width: 100%; margin: 6px 0; padding: 8px; }
-    textarea { height: 110px; }
-    pre { background: #f4f4f4; padding: 12px; border-radius: 6px; overflow: auto; }
+    input, button, textarea { padding: 8px; margin: 6px 0; width: 360px; }
+    textarea { height: 90px; }
     .row { margin-bottom: 16px; }
+    .ticket { border: 1px solid #ccc; padding: 10px; margin: 10px 0; border-radius: 6px; }
+    .small { color: #666; font-size: 12px; }
+    .error { color: #b00020; }
+    .ok { color: #0a7; }
   </style>
 </head>
 <body>
-  <h1>Helpdesk</h1>
+  <h1>Cloud Helpdesk</h1>
 
   <div class="row">
-    <h2>Login (API Key)</h2>
-    <input id="apikey" placeholder="API key" />
-    <button id="loginBtn">Login</button>
-    <div id="loginStatus"></div>
+    <h3>API Key</h3>
+    <input id="apiKey" placeholder="Enter API Key" />
+    <div>
+      <button onclick="saveKey()">Save Key</button>
+      <button onclick="clearKey()">Logout / Clear Key</button>
+    </div>
+    <div id="keyStatus" class="small"></div>
   </div>
 
-  <hr />
-
   <div class="row">
-    <h2>Create Ticket</h2>
+    <h3>Create Ticket</h3>
     <input id="title" placeholder="Title" />
     <textarea id="description" placeholder="Description"></textarea>
-    <button id="createBtn">Create</button>
-    <div id="createStatus"></div>
+    <div>
+      <button onclick="createTicket()">Create</button>
+    </div>
+    <div id="createStatus" class="small"></div>
   </div>
 
-  <hr />
-
   <div class="row">
-    <h2>Tickets</h2>
-    <button id="refreshBtn">Refresh</button>
-    <pre id="output">{}</pre>
+    <h3>Tickets</h3>
+    <button onclick="loadTickets()">Refresh Tickets</button>
+    <div id="tickets"></div>
+    <div id="loadStatus" class="small"></div>
   </div>
 
 <script>
-  const API_BASE = ""; // same domain
-
   function getKey() {
-    return localStorage.getItem("HELPDESK_API_KEY") || "";
+    return localStorage.getItem("API_KEY") || "";
   }
 
   function setKey(k) {
-    localStorage.setItem("HELPDESK_API_KEY", k);
+    localStorage.setItem("API_KEY", k);
   }
 
-  async function apiFetch(path, options = {}) {
-    const key = getKey();
-    const headers = {
-      ...(options.headers || {}),
+  function deleteKey() {
+    localStorage.removeItem("API_KEY");
+  }
+
+  function headersWithKey() {
+    const k = getKey();
+    return {
       "Content-Type": "application/json",
-      "X-API-KEY": key
+      "X-API-KEY": k
     };
-
-    const res = await fetch(API_BASE + path, { ...options, headers });
-
-    let data;
-    try {
-      data = await res.json();
-    } catch {
-      data = { error: "Non-JSON response" };
-    }
-
-    if (!res.ok) throw data;
-    return data;
   }
 
-  document.getElementById("apikey").value = getKey();
-
-  document.getElementById("loginBtn").addEventListener("click", () => {
-    const k = document.getElementById("apikey").value.trim();
-    setKey(k);
-    document.getElementById("loginStatus").innerText = "Saved API key.";
-  });
-
-  document.getElementById("refreshBtn").addEventListener("click", async () => {
-    const out = document.getElementById("output");
-    out.textContent = "Loading...";
-    try {
-      const tickets = await apiFetch("/tickets", { method: "GET" });
-      out.textContent = JSON.stringify(tickets, null, 2);
-    } catch (e) {
-      out.textContent = JSON.stringify(e, null, 2);
+  function saveKey() {
+    const k = document.getElementById("apiKey").value.trim();
+    if (!k) {
+      document.getElementById("keyStatus").innerHTML = "<span class='error'>Key cannot be blank.</span>";
+      return;
     }
-  });
+    setKey(k);
+    document.getElementById("keyStatus").innerHTML = "<span class='ok'>Saved.</span>";
+  }
 
-  document.getElementById("createBtn").addEventListener("click", async () => {
-    const status = document.getElementById("createStatus");
-    status.innerText = "Creating...";
+  function clearKey() {
+    deleteKey();
+    document.getElementById("apiKey").value = "";
+    document.getElementById("keyStatus").innerHTML = "<span class='ok'>Cleared.</span>";
+  }
+
+  async function loadTickets() {
+    document.getElementById("loadStatus").textContent = "Loading...";
     try {
-      const title = document.getElementById("title").value.trim();
-      const description = document.getElementById("description").value.trim();
+      const res = await fetch("/tickets", { method: "GET", headers: headersWithKey() });
+      const data = await res.json();
 
-      const resp = await apiFetch("/tickets", {
+      if (!res.ok) {
+        document.getElementById("tickets").innerHTML = "";
+        document.getElementById("loadStatus").innerHTML = "<span class='error'>" + (data.error || "Error") + "</span>";
+        return;
+      }
+
+      const container = document.getElementById("tickets");
+      container.innerHTML = "";
+
+      data.forEach(t => {
+        const div = document.createElement("div");
+        div.className = "ticket";
+        div.innerHTML =
+          "<b>#" + t.id + " — " + t.title + "</b><br/>" +
+          "<div>" + t.description + "</div>" +
+          "<div class='small'>Status: " + t.status + " | Created: " + t.created_at + "</div>";
+        container.appendChild(div);
+      });
+
+      document.getElementById("loadStatus").innerHTML = "<span class='ok'>Loaded " + data.length + " ticket(s).</span>";
+    } catch (e) {
+      document.getElementById("loadStatus").innerHTML = "<span class='error'>Failed to load.</span>";
+    }
+  }
+
+  async function createTicket() {
+    document.getElementById("createStatus").textContent = "Sending...";
+    const title = document.getElementById("title").value.trim();
+    const description = document.getElementById("description").value.trim();
+
+    try {
+      const res = await fetch("/tickets", {
         method: "POST",
+        headers: headersWithKey(),
         body: JSON.stringify({ title, description })
       });
 
-      status.innerText = JSON.stringify(resp);
-      document.getElementById("refreshBtn").click();
+      const data = await res.json();
+
+      if (!res.ok) {
+        document.getElementById("createStatus").innerHTML = "<span class='error'>" + (data.error || "Error") + "</span>";
+        return;
+      }
+
+      document.getElementById("createStatus").innerHTML = "<span class='ok'>Ticket created.</span>";
+      document.getElementById("title").value = "";
+      document.getElementById("description").value = "";
+      loadTickets();
     } catch (e) {
-      status.innerText = JSON.stringify(e);
+      document.getElementById("createStatus").innerHTML = "<span class='error'>Request failed.</span>";
     }
-  });
+  }
+
+  // On page load: fill key box from storage + load tickets
+  (function init() {
+    const k = getKey();
+    document.getElementById("apiKey").value = k;
+    document.getElementById("keyStatus").textContent = k ? "Key loaded from browser storage." : "No key saved yet.";
+    // only auto-load if key exists
+    if (k) loadTickets();
+  })();
 </script>
 </body>
 </html>
+
