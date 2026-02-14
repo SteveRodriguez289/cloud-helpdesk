@@ -28,6 +28,10 @@ odbc = (
 )
 conn_str = "mssql+pyodbc:///?odbc_connect=" + urllib.parse.quote_plus(odbc)
 engine = create_engine(conn_str, pool_pre_ping=True)
+print("DB_SERVER =", DB_SERVER)
+print("DB_NAME   =", DB_NAME)
+print("DB_USER   =", DB_USER)
+
 
 @app.get("/")
 def home():
