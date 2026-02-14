@@ -1,40 +1,113 @@
 <!doctype html>
 <html>
-  <head>
-    <meta charset="utf-8" />
-    <title>Helpdesk Tickets</title>
-    <link rel="stylesheet" href="/static/styles.css">
-  </head>
-  <body>
-    <h1>Helpdesk</h1>
+<head>
+  <meta charset="utf-8" />
+  <title>Helpdesk</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; }
+    input, textarea, button { width: 420px; max-width: 100%; margin: 6px 0; padding: 8px; }
+    textarea { height: 110px; }
+    pre { background: #f4f4f4; padding: 12px; border-radius: 6px; overflow: auto; }
+    .row { margin-bottom: 16px; }
+  </style>
+</head>
+<body>
+  <h1>Helpdesk</h1>
 
-    <section>
-      <h2>Login (API Key)</h2>
-      <input id="apiKey" placeholder="API key">
-      <button id="loginBtn">Login</button>
-      <div id="loginMsg"></div>
-    </section>
+  <div class="row">
+    <h2>Login (API Key)</h2>
+    <input id="apikey" placeholder="API key" />
+    <button id="loginBtn">Login</button>
+    <div id="loginStatus"></div>
+  </div>
 
-    <hr>
+  <hr />
 
-    <section>
-      <h2>Create Ticket</h2>
-      <input id="title" placeholder="Title">
-      <br><br>
-      <textarea id="desc" placeholder="Description"></textarea>
-      <br><br>
-      <button id="createBtn">Create</button>
-      <div id="createMsg"></div>
-    </section>
+  <div class="row">
+    <h2>Create Ticket</h2>
+    <input id="title" placeholder="Title" />
+    <textarea id="description" placeholder="Description"></textarea>
+    <button id="createBtn">Create</button>
+    <div id="createStatus"></div>
+  </div>
 
-    <hr>
+  <hr />
 
-    <section>
-      <h2>Tickets</h2>
-      <button id="refreshBtn">Refresh</button>
-      <pre id="tickets"></pre>
-    </section>
+  <div class="row">
+    <h2>Tickets</h2>
+    <button id="refreshBtn">Refresh</button>
+    <pre id="output">{}</pre>
+  </div>
 
-    <script src="/static/app.js"></script>
-  </body>
+<script>
+  const API_BASE = ""; // same domain
+
+  function getKey() {
+    return localStorage.getItem("HELPDESK_API_KEY") || "";
+  }
+
+  function setKey(k) {
+    localStorage.setItem("HELPDESK_API_KEY", k);
+  }
+
+  async function apiFetch(path, options = {}) {
+    const key = getKey();
+    const headers = {
+      ...(options.headers || {}),
+      "Content-Type": "application/json",
+      "X-API-KEY": key
+    };
+
+    const res = await fetch(API_BASE + path, { ...options, headers });
+
+    let data;
+    try {
+      data = await res.json();
+    } catch {
+      data = { error: "Non-JSON response" };
+    }
+
+    if (!res.ok) throw data;
+    return data;
+  }
+
+  document.getElementById("apikey").value = getKey();
+
+  document.getElementById("loginBtn").addEventListener("click", () => {
+    const k = document.getElementById("apikey").value.trim();
+    setKey(k);
+    document.getElementById("loginStatus").innerText = "Saved API key.";
+  });
+
+  document.getElementById("refreshBtn").addEventListener("click", async () => {
+    const out = document.getElementById("output");
+    out.textContent = "Loading...";
+    try {
+      const tickets = await apiFetch("/tickets", { method: "GET" });
+      out.textContent = JSON.stringify(tickets, null, 2);
+    } catch (e) {
+      out.textContent = JSON.stringify(e, null, 2);
+    }
+  });
+
+  document.getElementById("createBtn").addEventListener("click", async () => {
+    const status = document.getElementById("createStatus");
+    status.innerText = "Creating...";
+    try {
+      const title = document.getElementById("title").value.trim();
+      const description = document.getElementById("description").value.trim();
+
+      const resp = await apiFetch("/tickets", {
+        method: "POST",
+        body: JSON.stringify({ title, description })
+      });
+
+      status.innerText = JSON.stringify(resp);
+      document.getElementById("refreshBtn").click();
+    } catch (e) {
+      status.innerText = JSON.stringify(e);
+    }
+  });
+</script>
+</body>
 </html>
