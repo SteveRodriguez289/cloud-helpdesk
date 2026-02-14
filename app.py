@@ -6,17 +6,21 @@ from sqlalchemy import create_engine, text
 app = Flask(__name__)
 
 DB_SERVER = os.environ.get("DB_SERVER")
-DB_NAME = os.environ.get("DB_NAME")
-DB_USER = os.environ.get("DB_USER")
-DB_PASS = os.environ.get("DB_PASSWORD")
-
-ODBC_DRIVER = os.environ.get("ODBC_DRIVER", "ODBC Driver 18 for SQL Server")
+DB_NAME   = os.environ.get("DB_NAME")
+DB_USER   = os.environ.get("DB_USER")
+DB_PASS   = os.environ.get("DB_PASSWORD")
 
 if not all([DB_SERVER, DB_NAME, DB_USER, DB_PASS]):
-    raise RuntimeError("Missing required database environment variables")
+    missing = [k for k, v in {
+        "DB_SERVER": DB_SERVER,
+        "DB_NAME": DB_NAME,
+        "DB_USER": DB_USER,
+        "DB_PASSWORD": DB_PASS
+    }.items() if not v]
+    raise RuntimeError(f"Missing environment variables: {', '.join(missing)}")
 
-odbc_str = (
-    f"Driver={{{ODBC_DRIVER}}};"
+odbc = (
+    "Driver={ODBC Driver 18 for SQL Server};"
     f"Server=tcp:{DB_SERVER},1433;"
     f"Database={DB_NAME};"
     f"Uid={DB_USER};"
@@ -25,14 +29,8 @@ odbc_str = (
     "TrustServerCertificate=no;"
     "Connection Timeout=30;"
 )
-
-connection_url = "mssql+pyodbc:///?odbc_connect=" + urllib.parse.quote_plus(odbc_str)
-
-engine = create_engine(
-    connection_url,
-    pool_pre_ping=True,
-    pool_recycle=1800
-)
+conn_str = "mssql+pyodbc:///?odbc_connect=" + urllib.parse.quote_plus(odbc)
+engine = create_engine(conn_str, pool_pre_ping=True)
 
 @app.get("/")
 def home():
@@ -47,7 +45,10 @@ def get_tickets():
                 FROM tickets
                 ORDER BY created_at DESC
             """)).mappings().all()
-        return jsonify(list(rows)), 200
+
+        # FIX: convert RowMapping -> dict so jsonify can serialize it
+        return jsonify([dict(r) for r in rows]), 200
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -63,13 +64,11 @@ def post_ticket():
 
         with engine.begin() as conn:
             conn.execute(
-                text("""
-                    INSERT INTO tickets (title, description)
-                    VALUES (:title, :description)
-                """),
-                {"title": title, "description": description},
+                text("INSERT INTO tickets (title, description) VALUES (:t, :d)"),
+                {"t": title, "d": description},
             )
 
         return jsonify({"message": "ticket created"}), 201
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
