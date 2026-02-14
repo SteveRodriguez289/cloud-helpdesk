@@ -1,0 +1,40 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Helpdesk Tickets</title>
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body>
+    <h1>Helpdesk</h1>
+
+    <section>
+      <h2>Login (API Key)</h2>
+      <input id="apiKey" placeholder="API key">
+      <button id="loginBtn">Login</button>
+      <div id="loginMsg"></div>
+    </section>
+
+    <hr>
+
+    <section>
+      <h2>Create Ticket</h2>
+      <input id="title" placeholder="Title">
+      <br><br>
+      <textarea id="desc" placeholder="Description"></textarea>
+      <br><br>
+      <button id="createBtn">Create</button>
+      <div id="createMsg"></div>
+    </section>
+
+    <hr>
+
+    <section>
+      <h2>Tickets</h2>
+      <button id="refreshBtn">Refresh</button>
+      <pre id="tickets"></pre>
+    </section>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>
