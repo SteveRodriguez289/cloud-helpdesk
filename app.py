@@ -58,7 +58,7 @@ def get_tickets():
     try:
         with engine.connect() as conn:
             rows = conn.execute(text("""
-                SELECT id, title, description, status, created_at
+                SELECT id, title, description, status, created_at, priority, assigned_to
                 FROM tickets
                 ORDER BY created_at DESC
             """)).mappings().all()
@@ -78,6 +78,8 @@ def post_ticket():
     data = request.get_json(silent=True) or {}
     title = (data.get("title") or "").strip()
     description = (data.get("description") or "").strip()
+    priority = (data.get("priority") or "Medium").strip()
+    assigned_to = (data.get("assigned_to") or data.get("assigned") or "").strip()
 
     if not title or not description:
         return jsonify({"error": "title and description required"}), 400
@@ -85,8 +87,11 @@ def post_ticket():
     try:
         with engine.begin() as conn:
             conn.execute(
-                text("INSERT INTO tickets (title, description) VALUES (:t, :d)"),
-                {"t": title, "d": description},
+                text("""
+                    INSERT INTO tickets (title, description, status, priority, assigned_to)
+                    VALUES (:t, :d, 'Open', :p, :a)
+                """),
+                {"t": title, "d": description, "p": priority, "a": assigned_to},
             )
         return jsonify({"message": "ticket created"}), 201
 
@@ -148,3 +153,8 @@ def add_comment(ticket_id: int):
 
     except SQLAlchemyError as e:
         return jsonify({"error": "database_error", "details": str(e)}), 500
+
+
+if __name__ == "__main__":
+    # for local testing only; in Azure use the webserver provided by the platform
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=False)
